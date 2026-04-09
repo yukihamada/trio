@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Apple Events: Sytem Events / LINE 自動送信に必要 -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+
+    <!-- Hardened Runtime but allow unsigned DYLD for development -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- NO sandbox: 通知DB/画面キャプチャ/アプリ制御が必要 -->
+</dict>
+</plist>

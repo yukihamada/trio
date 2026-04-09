@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key><string>Trio</string>
+    <key>CFBundleIdentifier</key><string>ai.trio.app</string>
+    <key>CFBundleName</key><string>Trio</string>
+    <key>CFBundleDisplayName</key><string>Trio</string>
+    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>LSUIElement</key><true/>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>LINE等への自動メッセージ送信に使用します</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>LINEメッセージをOCRで取得するため画面収録が必要です</string>
+    <key>NSContactsUsageDescription</key>
+    <string>送信者のプロフィール情報を取得します</string>
+    <key>NSUserNotificationsUsageDescription</key>
+    <string>重要メッセージ受信時に通知します</string>
+</dict>
+</plist>
