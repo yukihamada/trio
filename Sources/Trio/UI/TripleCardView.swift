@@ -928,6 +928,8 @@ struct MessageCard: View {
     @State private var hover = false
     @State private var showAllReplies: Bool = false
 
+    @State private var swipeOffset: CGFloat = 0
+
     var body: some View {
         HStack(spacing: 0) {
             // Priority bar (left edge)
@@ -967,6 +969,26 @@ struct MessageCard: View {
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        .offset(x: swipeOffset)
+        .gesture(
+            DragGesture(minimumDistance: 30)
+                .onChanged { v in
+                    if v.translation.width < 0 {
+                        swipeOffset = v.translation.width
+                    }
+                }
+                .onEnded { v in
+                    if v.translation.width < -100 {
+                        // 左スワイプでスキップ
+                        withAnimation(.easeOut(duration: 0.2)) { swipeOffset = -500 }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            store.skip(message: message)
+                        }
+                    } else {
+                        withAnimation(.spring(response: 0.3)) { swipeOffset = 0 }
+                    }
+                }
+        )
         .onHover { hover = $0 }
     }
 
@@ -1020,6 +1042,22 @@ struct MessageCard: View {
 
             // Priority badge + shortcut
             VStack(alignment: .trailing, spacing: 4) {
+                // × スキップボタン (右上)
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { swipeOffset = -500 }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        store.skip(message: message)
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(TrioTheme.tertiaryText)
+                        .padding(5)
+                        .background(Circle().fill(TrioTheme.surfaceElevated))
+                }
+                .buttonStyle(.plain)
+                .help("スキップ (S)")
+
                 if message.importanceScore > 0 {
                     Text(TrioTheme.priorityLabel(message.importanceScore))
                         .font(.system(size: 9, weight: .bold))
@@ -1100,13 +1138,14 @@ struct MessageCard: View {
         }
     }
 
-    /// クイック返信バー: 1クリックでベスト返信送信 (カード上部)
+    /// クイック返信バー: 1クリックでベスト返信 即送信 (確認ダイアログなし)
     private func quickReplyBar(bestDraft: ReplyDraft) -> some View {
         let color = toneColor(bestDraft.tone)
         return Button {
             sending = true
             Task {
-                await store.send(message: message, draftIndex: 0, overrideText: bestDraft.text)
+                // クイック返信は常にconfirmスキップ
+                await store.send(message: message, draftIndex: 0, overrideText: bestDraft.text, fromWeb: true)
                 sending = false
             }
         } label: {

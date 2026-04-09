@@ -212,9 +212,19 @@ final class WebServer: @unchecked Sendable {
         .tone-icon { width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center;
                      font-size:11px; font-weight:800; flex-shrink:0; }
         .reply-text { font-size:12px; flex:1; }
-        .send-btn { background:#528EFF; color:#fff; border:none; padding:6px 12px; border-radius:6px;
-                    font-size:11px; font-weight:700; cursor:pointer; flex-shrink:0; }
-        .send-btn:active { opacity:0.7; }
+        .send-btn { background:#528EFF; color:#fff; border:none; padding:10px 16px; border-radius:8px;
+                    font-size:13px; font-weight:700; cursor:pointer; flex-shrink:0; min-width:60px; }
+        .send-btn:active { transform:scale(0.93); opacity:0.8; }
+        .quick-send { display:flex; align-items:center; gap:10px; padding:14px; margin:8px 0;
+                       background:linear-gradient(135deg,#22c55e,#16a34a); border-radius:12px;
+                       cursor:pointer; transition:transform .1s; border:none; width:100%; color:#fff; text-align:left; }
+        .quick-send:active { transform:scale(0.97); }
+        .quick-send .qs-icon { font-size:22px; }
+        .quick-send .qs-text { flex:1; font-size:13px; font-weight:600; line-height:1.3; }
+        .quick-send .qs-label { font-size:10px; opacity:0.7; }
+        .skip-btn { background:transparent; border:1px solid #333; color:#666; padding:8px 14px;
+                    border-radius:8px; font-size:12px; cursor:pointer; }
+        .skip-btn:active { background:#333; }
         .more-btn { text-align:center; padding:8px; color:#528EFF; font-size:11px; font-weight:600; cursor:pointer; }
         .filter-bar { padding:8px 16px; display:flex; gap:6px; overflow-x:auto; white-space:nowrap; }
         .filter-chip { padding:4px 10px; border-radius:12px; font-size:11px; font-weight:600;
@@ -301,19 +311,24 @@ final class WebServer: @unchecked Sendable {
             html += '<div class="time">'+timeAgo(m.receivedAt)+'</div></div>';
             html += '<div class="body">'+esc((m.body||'').substring(0,150))+'</div>';
             if (m.reasonForPriority) html += '<div class="reason">⚡ '+esc(m.reasonForPriority)+'</div>';
+            // クイック送信ボタン (最初の返信案を巨大ボタンで)
+            const mid = esc(m.id).replace(/'/g,"\\\\'");
+            if (drafts.length > 0) {
+              const d0 = drafts[0];
+              const txt0 = esc(d0.text).replace(/'/g,"\\\\'");
+              html += '<button class="quick-send" onclick="sendReply(this,\\''+mid+'\\',\\''+txt0+'\\',0)"><span class="qs-icon">⚡</span><div><div class="qs-label">ワンタップ返信</div><div class="qs-text">'+esc(d0.text)+'</div></div><span style="font-size:18px">→</span></button>';
+            }
             html += '<div class="replies">';
-            visibleDrafts.forEach((d, j) => {
+            visibleDrafts.slice(1).forEach((d, j) => {
               const tc = TONE_COLORS[d.tone] || '#528EFF';
               const tl = TONE_LABELS[d.tone] || d.tone;
-              const mid = esc(m.id).replace(/'/g,"\\\\'");
               const txt = esc(d.text).replace(/'/g,"\\\\'");
               html += '<div class="reply-row"><div class="tone-icon" style="background:'+tc+'22;color:'+tc+';">'+tl.substring(0,2)+'</div><div class="reply-text">'+esc(d.text)+'</div>';
-              html += '<button class="send-btn" onclick="sendReply(this.parentElement,\\''+mid+'\\',\\''+txt+'\\','+j+')">送信</button>';
-              html += '<button class="copy-btn" style="background:transparent;border:1px solid #ffffff30;color:#fff;padding:4px 8px;border-radius:4px;font-size:10px;cursor:pointer;" onclick="copyReply(this.parentElement,\\''+txt+'\\')">📋</button>';
+              html += '<button class="send-btn" onclick="sendReply(this.parentElement,\\''+mid+'\\',\\''+txt+'\\','+(j+1)+')">送信</button>';
               html += '</div>';
             });
             if (moreDrafts > 0) html += '<div class="more-btn" onclick="showAll(this,'+i+')">もっと見る (+'+moreDrafts+')</div>';
-            html += '<div style="margin-top:4px;"><button style="background:#ff3b3033;color:#ff3b30;border:1px solid #ff3b3055;padding:4px 10px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;" onclick="skipMsg(\\''+esc(m.id).replace(/'/g,"\\\\'")+'\\'  ,this)">スキップ</button></div>';
+            html += '<div style="margin-top:6px;text-align:right;"><button class="skip-btn" onclick="skipMsg(\\''+mid+'\\',this)">スキップ ⏭</button></div>';
             html += '</div></div></div></div>';
           });
           document.getElementById('cards').innerHTML = html;

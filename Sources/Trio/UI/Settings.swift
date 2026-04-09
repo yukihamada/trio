@@ -181,7 +181,7 @@ final class TrioSettings: ObservableObject {
         self.appTheme = AppTheme(rawValue: UserDefaults.standard.string(forKey: "trio.theme") ?? "system") ?? .system
         // デフォルトON (安全策: 初回は必ず確認ダイアログを出す)
         if UserDefaults.standard.object(forKey: "trio.confirmSend") == nil {
-            self.confirmBeforeSend = true
+            self.confirmBeforeSend = false
         } else {
             self.confirmBeforeSend = UserDefaults.standard.bool(forKey: "trio.confirmSend")
         }

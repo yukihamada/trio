@@ -25,13 +25,7 @@ struct Dispatcher {
             try sendViaMessages(handle: message.sender, text: replyText)
 
         case .line:
-            // LINEは画面を奪わず、クリップボード＋通知で案内
-            try await sendViaClipboardNotify(
-                service: "LINE",
-                chatName: message.threadId ?? message.sender,
-                text: replyText,
-                bundleId: "jp.naver.line.mac"
-            )
+            try await sendViaLINE(chatName: message.threadId ?? message.sender, text: replyText)
 
         default:
             // 全サービス共通: 画面を奪わずクリップボード＋通知
@@ -65,88 +59,85 @@ struct Dispatcher {
         try? await UNUserNotificationCenter.current().add(req)
     }
 
-    /// LINE 完全自動送信 (信頼性強化版):
-    /// 1. LINE.appアクティブ化 → フォーカス確認
-    /// 2. Cmd+K クイック検索 → チャット名検索 → Return で開く
-    /// 3. 入力欄フォーカス → Cmd+V → Return
-    /// エラー時: 最大2回リトライ、失敗時クリップボードに本文を残してユーザー通知
+    /// LINE 自動送信 (天才的方法):
+    /// 1. トーク検索で相手を見つける
+    /// 2. ウィンドウメニューで確実にチャット選択
+    /// 3. cliclick で入力欄クリック (AX不要)
+    /// 4. ペースト + Enter
     private func sendViaLINE(chatName: String, text: String) async throws {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "jp.naver.line.mac") else {
+        guard let _ = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "jp.naver.line.mac") else {
             throw NSError(domain: "Dispatcher", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "LINE.app not found"])
         }
 
-        // LINE.app起動 → frontmost化
-        let cfg = NSWorkspace.OpenConfiguration()
-        cfg.activates = true
-        _ = try await NSWorkspace.shared.openApplication(at: url, configuration: cfg)
-        try await Task.sleep(nanoseconds: 900_000_000)
-
-        // LINEプロセスがfrontmostになるまで最大2秒待機
-        var frontOk = false
-        for _ in 0..<10 {
-            if let front = NSWorkspace.shared.frontmostApplication,
-               front.bundleIdentifier == "jp.naver.line.mac" {
-                frontOk = true
-                break
-            }
-            try await Task.sleep(nanoseconds: 200_000_000)
-        }
-        guard frontOk else {
-            // フォールバック: クリップボードに本文を残してエラー
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
-            throw NSError(domain: "Dispatcher", code: 3,
-                          userInfo: [NSLocalizedDescriptionKey:
-                            "LINE.app がアクティブ化できませんでした。本文はクリップボードにコピーしました。"])
-        }
-
-        // Step 1: Cmd+K で検索
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(chatName, forType: .string)
-        try await Task.sleep(nanoseconds: 150_000_000)
-
-        let openChatScript = """
+        // Step 1: LINE起動 + トーク検索で相手のチャットを開く
+        let searchName = chatName
+            .replacingOccurrences(of: "LINE · ", with: "")
+            .replacingOccurrences(of: "LINE·", with: "")
+            .components(separatedBy: " ").first ?? chatName
+        let searchScript = """
+        tell application "LINE" to activate
+        delay 0.8
         tell application "System Events"
-            tell process "LINE"
-                set frontmost to true
-                delay 0.4
-                keystroke "k" using {command down}
-                delay 0.5
-                keystroke "a" using {command down}
-                delay 0.1
-                key code 51
-                delay 0.1
-                keystroke "v" using {command down}
-                delay 0.45
-                key code 36
-                delay 0.9
-            end tell
+          tell process "LINE"
+            set frontmost to true
+            delay 0.3
+            keystroke "2" using {command down}
+            delay 0.5
+          end tell
         end tell
         """
-        try runOSA(openChatScript)
+        try runOSA(searchScript)
 
-        // Step 2: 本文をクリップボードへ
+        // 検索バーで相手を検索
+        let task1 = Process()
+        task1.launchPath = "/opt/homebrew/bin/cliclick"
+        task1.arguments = ["c:120,75"]
+        try task1.run()
+        task1.waitUntilExit()
+        try await Task.sleep(nanoseconds: 500_000_000)
+
+        let typeScript = """
+        tell application "System Events"
+          keystroke "a" using {command down}
+          delay 0.1
+          key code 51
+          delay 0.1
+          keystroke "\(searchName)"
+          delay 1.5
+          key code 125
+          delay 0.3
+          key code 36
+          delay 1.5
+        end tell
+        """
+        try runOSA(typeScript)
+
+        // Step 2: クリップボードにメッセージセット
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
         try await Task.sleep(nanoseconds: 300_000_000)
 
-        // Step 3: 入力欄にフォーカス → Cmd+V → Return
-        // 入力欄クリックはAX経由が理想だが、Returnで閉じた直後は入力欄がフォーカスされている前提
+        // Step 3: cliclick で入力欄クリック
+        let task2 = Process()
+        task2.launchPath = "/opt/homebrew/bin/cliclick"
+        task2.arguments = ["c:600,870"]
+        try task2.run()
+        task2.waitUntilExit()
+        try await Task.sleep(nanoseconds: 500_000_000)
+
+        // Step 4: ペースト + 送信
         let sendScript = """
         tell application "System Events"
-            tell process "LINE"
-                set frontmost to true
-                delay 0.25
-                keystroke "v" using {command down}
-                delay 0.25
-                key code 36
-                delay 0.2
-            end tell
+          keystroke "v" using {command down}
+          delay 0.8
+          key code 36
         end tell
         """
         try runOSA(sendScript)
     }
+
+    // (旧LINE送信メソッド削除済み — 天才的方法に統合)
 
     private func runOSA(_ script: String) throws {
         let task = Process()

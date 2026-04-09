@@ -639,13 +639,42 @@ input[type=email]:focus{border-color:#3b82f6}
   <div class="feat"><div class="icon">🔒</div><h3>プライバシー重視</h3><p>AES-256暗号化、データはローカル優先</p></div>
 </div>
 
-<!-- ログイン (既にアプリを持っている人向け) -->
+<!-- 使い方ステップ -->
+<div class="dl-section" style="text-align:left;">
+  <h2 style="text-align:center;">🚀 はじめかた (3ステップ)</h2>
+  <div style="display:flex;flex-direction:column;gap:16px;margin-top:16px;">
+    <div style="display:flex;gap:12px;align-items:flex-start;">
+      <div style="min-width:36px;height:36px;background:#3b82f6;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#fff;">1</div>
+      <div>
+        <div style="font-weight:700;font-size:14px;">Mac アプリをインストール</div>
+        <div style="font-size:12px;color:#888;">上の「Trio をインストール」ボタンからDL → ダブルクリック</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start;">
+      <div style="min-width:36px;height:36px;background:#8b5cf6;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#fff;">2</div>
+      <div>
+        <div style="font-weight:700;font-size:14px;">APIキーを設定 + 権限を許可</div>
+        <div style="font-size:12px;color:#888;">初回起動時のガイドに従うだけ (2分で完了)</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start;">
+      <div style="min-width:36px;height:36px;background:#22c55e;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#fff;">3</div>
+      <div>
+        <div style="font-weight:700;font-size:14px;">スマホからも操作 (下のログインから)</div>
+        <div style="font-size:12px;color:#888;">メールでログイン → Webダッシュボードが開く → スマホで返信管理</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ログイン -->
 <div class="login-section">
-  <h2>📱 Web ダッシュボード</h2>
-  <p class="sub">Mac の Trio アプリ設定済みの方はメールでログイン</p>
+  <h2>📱 スマホ / Web でログイン</h2>
+  <p class="sub">メールアドレスを入力 → 届いたリンクをクリック → ダッシュボードが開きます</p>
   <div class="input-wrap"><input type="email" id="email" placeholder="you@example.com" autocomplete="email"></div>
-  <button class="login-btn" onclick="doLogin()">マジックリンクを送信</button>
+  <button class="login-btn" onclick="doLogin()">ログインリンクを送信</button>
   <p class="msg" id="msg"></p>
+  <p style="font-size:11px;color:#444;margin-top:8px;">※ Mac の Trio アプリと同じメールで登録してください</p>
 </div>
 
 <div class="footer">
