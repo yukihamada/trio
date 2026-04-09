@@ -282,21 +282,18 @@ struct TripleCardView: View {
 
             // Actions
             HStack(spacing: 6) {
-                // Webで開く (ワンクリック)
+                // Webで開く (トークン付き安全URL)
                 iconButton(icon: "globe", active: false, tooltip: "スマホ/Webで開く") {
                     Task {
-                        // 最新状態をアップロード
                         await ServerRelay.shared.uploadState(store: store)
-                        // トークン付きURLを開く
-                        let token = store.settings.trioCloudToken
-                        if !token.isEmpty {
-                            let url = URL(string: "\(TrioSettings.trioCloudURL)/?token=\(token)")!
-                            NSWorkspace.shared.open(url)
-                        } else {
-                            // ローカルWeb
-                            let url = URL(string: WebServer.shared.lanURL ?? WebServer.shared.localURL)!
-                            NSWorkspace.shared.open(url)
-                        }
+                        // ローカルWebトークン読み込み
+                        let tokenURL = URL(fileURLWithPath: NSHomeDirectory())
+                            .appendingPathComponent("Library/Application Support/Trio/.web_token")
+                        let localToken = (try? String(contentsOf: tokenURL, encoding: .utf8))?
+                            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                        let baseURL = WebServer.shared.lanURL ?? WebServer.shared.localURL
+                        let url = URL(string: "\(baseURL)/?token=\(localToken)")!
+                        NSWorkspace.shared.open(url)
                     }
                 }
 

@@ -49,9 +49,7 @@ struct AppOCRScraper {
             return []
         }
 
-        app.activate(options: [])
-        try? await Task.sleep(nanoseconds: 600_000_000)
-
+        // バックグラウンド取得: activate しない
         guard let img = captureWindow(pid: app.processIdentifier) else {
             tlog("[ocr-\(service.rawValue)] capture failed")
             return []

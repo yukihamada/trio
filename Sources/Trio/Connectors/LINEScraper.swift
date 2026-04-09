@@ -132,9 +132,7 @@ struct LINEScraper {
             return []
         }
 
-        app.activate(options: [])
-        try? await Task.sleep(nanoseconds: 600_000_000)
-
+        // バックグラウンド取得: activate しない (フォーカスを奪わない)
         guard let img = captureWindow(pid: app.processIdentifier) else {
             tlog("[line] capture failed (window not found?)")
             return []

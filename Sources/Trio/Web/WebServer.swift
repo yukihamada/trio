@@ -49,6 +49,39 @@ final class WebServer: @unchecked Sendable {
         }
     }
 
+    /// 認証トークン (起動時にファイルから読み込み)
+    private lazy var authToken: String = {
+        let url = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support/Trio/.web_token")
+        return (try? String(contentsOf: url, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)) ?? ""
+    }()
+
+    /// リクエストの認証チェック (token パラメータ or Authorization ヘッダー)
+    private func isAuthorized(request: String) -> Bool {
+        guard !authToken.isEmpty else { return false }
+        // URLパラメータ ?token=xxx
+        if request.contains("token=\(authToken)") { return true }
+        // Authorization: Bearer xxx
+        if request.contains("Bearer \(authToken)") { return true }
+        // Cookie: trio_token=xxx
+        if request.contains("trio_token=\(authToken)") { return true }
+        return false
+    }
+
+    /// レート制限 (IP単位で1分10リクエストまで)
+    private var requestCounts: [String: (count: Int, resetAt: Date)] = [:]
+    private func isRateLimited() -> Bool {
+        let now = Date()
+        let key = "local"  // ローカルサーバなのでIP区別不要
+        var entry = requestCounts[key] ?? (count: 0, resetAt: now.addingTimeInterval(60))
+        if now > entry.resetAt {
+            entry = (count: 0, resetAt: now.addingTimeInterval(60))
+        }
+        entry.count += 1
+        requestCounts[key] = entry
+        return entry.count > 30  // 1分30リクエストまで
+    }
+
     private func route(request: String) -> String {
         let firstLine = request.split(separator: "\r\n").first ?? ""
         let parts = firstLine.split(separator: " ")
@@ -56,9 +89,30 @@ final class WebServer: @unchecked Sendable {
         let method = String(parts[0])
         let path = String(parts[1])
 
+        // ログイン画面とトークン検証は認証不要
+        if method == "GET" && (path == "/" || path.hasPrefix("/?")) && !path.contains("token=") {
+            return Self.response(status: 200, body: loginPageHTML(), contentType: "text/html; charset=utf-8")
+        }
+
+        // 認証チェック
+        guard isAuthorized(request: request) else {
+            return Self.response(status: 401, body: "{\"error\":\"unauthorized\"}", contentType: "application/json")
+        }
+
+        // レート制限
+        if isRateLimited() {
+            return Self.response(status: 429, body: "{\"error\":\"rate limited\"}", contentType: "application/json")
+        }
+
         switch (method, path) {
-        case ("GET", "/"):
-            return Self.response(status: 200, body: Self.indexHTML(), contentType: "text/html; charset=utf-8")
+        case ("GET", _) where path.hasPrefix("/?token=") || path.hasPrefix("/?t="):
+            // 認証済みトップページ → セッションCookie設定してリダイレクト
+            let html = Self.indexHTML().replacingOccurrences(
+                of: "const TOKEN=''",
+                with: "const TOKEN='\(authToken)'"
+            )
+            return Self.response(status: 200, body: html, contentType: "text/html; charset=utf-8",
+                                 extraHeaders: "Set-Cookie: trio_token=\(authToken); Path=/; HttpOnly; SameSite=Strict\r\n")
         case ("GET", "/api/messages"):
             return messagesJSON()
         case ("POST", "/api/send"):
@@ -91,16 +145,48 @@ final class WebServer: @unchecked Sendable {
         return Self.response(status: 200, body: str, contentType: "application/json")
     }
 
-    static func response(status: Int, body: String, contentType: String = "text/plain") -> String {
-        let statusText = status == 200 ? "OK" : "Error"
+    static func response(status: Int, body: String, contentType: String = "text/plain", extraHeaders: String = "") -> String {
+        let statusText: String
+        switch status {
+        case 200: statusText = "OK"
+        case 401: statusText = "Unauthorized"
+        case 429: statusText = "Too Many Requests"
+        default: statusText = "Error"
+        }
         return """
         HTTP/1.1 \(status) \(statusText)\r
         Content-Type: \(contentType)\r
         Content-Length: \(body.utf8.count)\r
-        Access-Control-Allow-Origin: *\r
-        Connection: close\r
+        \(extraHeaders)Connection: close\r
         \r
         \(body)
+        """
+    }
+
+    /// ログインページ (トークン入力画面)
+    private func loginPageHTML() -> String {
+        return """
+        <!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+        <title>Trio — ログイン</title>
+        <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,sans-serif;background:#0a0a0a;color:#e5e5e5;min-height:100vh;display:flex;align-items:center;justify-content:center}
+        .box{text-align:center;padding:40px 24px;max-width:420px;width:100%}
+        h1{font-size:28px;font-weight:800;margin-bottom:8px}
+        .sub{color:#737373;font-size:13px;margin-bottom:24px}
+        input{width:100%;padding:14px;border-radius:10px;border:1px solid #262626;background:#171717;color:#e5e5e5;font-size:15px;margin-bottom:12px;font-family:monospace}
+        button{width:100%;padding:14px;border-radius:10px;border:none;background:#3b82f6;color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+        .hint{font-size:11px;color:#525252;margin-top:16px;line-height:1.6}
+        </style></head><body>
+        <div class="box">
+        <div style="font-size:48px;margin-bottom:12px">🔒</div>
+        <h1>Trio</h1>
+        <p class="sub">アクセスにはトークンが必要です</p>
+        <input id="t" placeholder="トークンを入力" autocomplete="off">
+        <button onclick="location.href='/?token='+document.getElementById('t').value">ログイン</button>
+        <p class="hint">トークンは Trio Mac アプリの設定 → クラウド同期セクションで確認できます。<br>または Trio.app の 🌐 ボタンから自動ログインできます。</p>
+        </div></body></html>
         """
     }
 
@@ -226,7 +312,10 @@ final class WebServer: @unchecked Sendable {
                     border-radius:8px; font-size:12px; cursor:pointer; }
         .skip-btn:active { background:#333; }
         .more-btn { text-align:center; padding:8px; color:#528EFF; font-size:11px; font-weight:600; cursor:pointer; }
-        .filter-bar { padding:8px 16px; display:flex; gap:6px; overflow-x:auto; white-space:nowrap; }
+        .filter-bar { padding:8px 16px; display:flex; gap:6px; overflow-x:auto; white-space:nowrap; align-items:center; }
+        .skip-all { background:#ff3b3022; color:#ff3b30; border:1px solid #ff3b3044; padding:6px 14px;
+                     border-radius:20px; font-size:12px; font-weight:700; cursor:pointer; flex-shrink:0; }
+        .skip-all:active { background:#ff3b3044; }
         .filter-chip { padding:4px 10px; border-radius:12px; font-size:11px; font-weight:600;
                        background:#ffffff08; border:1px solid #ffffff15; color:#ffffff90; cursor:pointer; }
         .filter-chip.active { background:#528EFF22; border-color:#528EFF55; color:#528EFF; }
@@ -251,6 +340,8 @@ final class WebServer: @unchecked Sendable {
         <div class="filter-bar" id="filters"></div>
         <div class="cards" id="cards"><div class="loading">読み込み中...</div></div>
         <script>
+        const TOKEN='';
+        function authHeaders(){return {'Content-Type':'application/json','Authorization':'Bearer '+TOKEN}}
         const TONE_COLORS = {yes:'#34c759',yes_polite:'#34c759',yes_detail:'#34c759',no:'#ff3b30',no_polite:'#ff3b30',
           ask:'#ff9500',ask_detail:'#ff9500',later:'#ffcc00',detail:'#528EFF',casual:'#af52de',emoji:'#ff2d55',
           thanks:'#ff6b8a',suggest:'#f0c020',instructed:'#528EFF'};
@@ -262,7 +353,7 @@ final class WebServer: @unchecked Sendable {
         let filter = 'all';
 
         async function load() {
-          const r = await fetch('/api/messages');
+          const r = await fetch('/api/messages',{headers:authHeaders()});
           allMsgs = await r.json();
           allMsgs = allMsgs.filter(m => m.status === 'pending');
           document.getElementById('count').textContent = allMsgs.length + '件';
@@ -274,7 +365,8 @@ final class WebServer: @unchecked Sendable {
         function buildFilters() {
           const svcs = {};
           allMsgs.forEach(m => { svcs[m.service] = (svcs[m.service]||0)+1; });
-          let html = '<div class="filter-chip active" onclick="setFilter(\\'all\\')">すべて '+allMsgs.length+'</div>';
+          let html = '<button class="skip-all" onclick="skipAllVisible()">全部スキップ ⏭</button>';
+          html += '<div class="filter-chip active" onclick="setFilter(\\'all\\')">すべて '+allMsgs.length+'</div>';
           Object.entries(svcs).sort((a,b)=>b[1]-a[1]).forEach(([s,c]) => {
             html += '<div class="filter-chip" onclick="setFilter(\\''+s+'\\')">'+s+' '+c+'</div>';
           });
@@ -354,7 +446,7 @@ final class WebServer: @unchecked Sendable {
           try {
             const r = await fetch('/api/send', {
               method:'POST',
-              headers:{'Content-Type':'application/json'},
+              headers:authHeaders(),
               body: JSON.stringify({messageId:msgId, replyText:text, draftIndex:draftIdx})
             });
             const d = await r.json();
@@ -377,11 +469,20 @@ final class WebServer: @unchecked Sendable {
           btn.textContent = '...';
           await fetch('/api/skip', {
             method:'POST',
-            headers:{'Content-Type':'application/json'},
+            headers:authHeaders(),
             body: JSON.stringify({messageId:msgId})
           });
           btn.textContent = '✅';
           setTimeout(load, 1000);
+        }
+
+        async function skipAllVisible() {
+          const msgs = filter === 'all' ? allMsgs : allMsgs.filter(m => m.service === filter);
+          if(!confirm(msgs.length+'件を全部スキップしますか？')) return;
+          for(const m of msgs) {
+            await fetch('/api/skip',{method:'POST',headers:authHeaders(),body:JSON.stringify({messageId:m.id})});
+          }
+          load();
         }
 
         function copyReply(el, text) {

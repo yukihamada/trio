@@ -194,6 +194,42 @@ final class AppStore: ObservableObject {
         messages.filter { $0.status == .pending }.count
     }
 
+    /// 送信者ごとにグループ化
+    struct PersonGroup: Identifiable {
+        let sender: String
+        let service: Service
+        var messages: [Message]
+        var latestMessage: Message { messages.first! }
+        var unreadCount: Int { messages.count }
+        var maxScore: Double { messages.map { $0.importanceScore }.max() ?? 0 }
+        var id: String { "\(sender)_\(service.rawValue)" }
+        var initials: String {
+            let parts = sender.split(separator: " ").prefix(2).map { String($0) }
+            if parts.count >= 2 {
+                return (parts[0].first.map(String.init) ?? "") + (parts[1].first.map(String.init) ?? "")
+            }
+            return String(sender.prefix(2))
+        }
+    }
+
+    var personGroups: [PersonGroup] {
+        let pending = messages.filter { $0.status == .pending }
+        var groups: [String: PersonGroup] = [:]
+        for m in pending {
+            let key = "\(m.sender)_\(m.service.rawValue)"
+            if groups[key] == nil {
+                groups[key] = PersonGroup(sender: m.sender, service: m.service, messages: [m])
+            } else {
+                groups[key]!.messages.append(m)
+            }
+        }
+        // 各グループ内はスコア降順
+        for key in groups.keys {
+            groups[key]!.messages.sort { $0.importanceScore > $1.importanceScore }
+        }
+        return groups.values.sorted { $0.maxScore > $1.maxScore }
+    }
+
     // MARK: - Refresh (差分処理)
 
     func refresh() async {
@@ -214,42 +250,57 @@ final class AppStore: ObservableObject {
         tlog("[refresh] notifDB: \(collected.count) msgs")
         needsFDA = NotificationDBReader.isFDAMissing()
 
-        // 2. キャッシュ復元 → 即UIに反映 (爆速! AI待たずに既知メッセージが並ぶ)
+        // 2. 重複排除 (同じ本文は最初の1件だけ)
+        var seenBodies: Set<String> = []
+        collected = collected.filter { m in
+            let key = String(m.body.prefix(40))
+                .replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: ".", with: "")
+                .replacingOccurrences(of: "…", with: "")
+            guard key.count >= 5 else { return false }
+            guard !seenBodies.contains(key) else { return false }
+            seenBodies.insert(key)
+            return true
+        }
+
+        // 3. キャッシュ復元 → 即UIに反映
         store.restore(into: &collected)
         for m in collected {
             userProfile.observeIncoming(sender: m.sender, service: m.service.rawValue)
         }
         self.messages = collected
         self.lastRefreshed = Date()
-        statusText = "📬 \(collected.count)件 (キャッシュから復元、最新取得中...)"
+        statusText = "📬 \(collected.count)件"
 
-        // 3. LINE OCR (既存実装、より精度高い専用パーサー)
+        // 4. LINE OCR
         if LINEScraper.isAvailable() && settings.isServiceEnabled(.line) {
             let lineMsgs = await LINEScraper.fetch()
             tlog("[refresh] LINE OCR: \(lineMsgs.count) msgs")
-            if !lineMsgs.isEmpty {
-                let existingIds = Set(collected.map { $0.id })
-                let newLine = lineMsgs.filter { !existingIds.contains($0.id) }
-                collected.append(contentsOf: newLine)
+            for m in lineMsgs {
+                let key = String(m.body.prefix(40)).replacingOccurrences(of: " ", with: "")
+                if !seenBodies.contains(key) && key.count >= 5 {
+                    seenBodies.insert(key)
+                    collected.append(m)
+                }
             }
         }
 
-        // 3b. 汎用OCR (Discord/Messenger/WhatsApp/Telegram/Teams等)
+        // 5. 汎用OCR (Discord等)
         let ocrServices: [Service] = [.slack, .chatwork, .discord, .telegram, .messenger, .whatsapp, .teams, .instagram]
         for svc in ocrServices where settings.isServiceEnabled(svc) && AppOCRScraper.isAppRunning(for: svc) {
-            // API設定済みなら OCR スキップ (Slack/Chatwork)
             if svc == .slack && slackToken != nil { continue }
             if svc == .chatwork && chatworkToken != nil { continue }
             let msgs = await AppOCRScraper.fetch(for: svc)
             tlog("[refresh] \(svc.rawValue) OCR: \(msgs.count) msgs")
-            if !msgs.isEmpty {
-                let existingIds = Set(collected.map { $0.id })
-                let newOnes = msgs.filter { !existingIds.contains($0.id) }
-                collected.append(contentsOf: newOnes)
+            for m in msgs {
+                let key = String(m.body.prefix(40)).replacingOccurrences(of: " ", with: "")
+                if !seenBodies.contains(key) && key.count >= 5 {
+                    seenBodies.insert(key)
+                    collected.append(m)
+                }
             }
         }
 
-        // 統一してリストア
         store.restore(into: &collected)
         self.messages = collected
 
@@ -451,11 +502,96 @@ final class AppStore: ObservableObject {
         objectWillChange.send()
     }
 
-    // MARK: - LLM コマンドバー
+    // MARK: - コマンド実行 (/send, /claude, /skip, AI指示)
 
-    /// 自然言語指示で全未読メッセージを一括処理
     func executeCommand() async {
-        guard !commandBarInput.isEmpty, let cfg = llmConfig else {
+        let input = commandBarInput.trimmingCharacters(in: .whitespaces)
+        guard !input.isEmpty else { return }
+
+        // /send 名前 メッセージ — LINE送信
+        if input.hasPrefix("send ") || input.hasPrefix("送信 ") {
+            let parts = input.dropFirst(input.hasPrefix("send ") ? 5 : 3)
+                .trimmingCharacters(in: .whitespaces)
+                .split(separator: " ", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else {
+                commandBarResult = "⚠️ 形式: /send 名前 メッセージ"
+                return
+            }
+            commandBarProcessing = true
+            commandBarResult = "📤 \(parts[0]) に送信中..."
+            // LINE送信
+            let dispatcher = Dispatcher(slackToken: slackToken, chatworkToken: chatworkToken)
+            let msg = Message(id: "cmd_\(Date().timeIntervalSince1970)", service: .line, sender: parts[0], body: "", receivedAt: Date())
+            do {
+                try await dispatcher.send(message: msg, replyText: parts[1])
+                commandBarResult = "✅ \(parts[0]) に送信完了"
+            } catch {
+                commandBarResult = "⚠️ 送信失敗: \(error.localizedDescription)"
+            }
+            commandBarProcessing = false
+            return
+        }
+
+        // /claude プロンプト — Claude Code CLI実行
+        if input.hasPrefix("claude ") || input.hasPrefix("ask ") {
+            let prompt = String(input.drop(while: { $0 != " " }).dropFirst())
+            commandBarProcessing = true
+            commandBarResult = "🤖 Claude Code 実行中..."
+            let task = Process()
+            task.launchPath = "/usr/bin/env"
+            task.arguments = ["claude", "-p", prompt]
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            task.standardError = pipe
+            do {
+                try task.run()
+                task.waitUntilExit()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                commandBarResult = "✅ Claude: \(output.prefix(200))"
+            } catch {
+                commandBarResult = "⚠️ Claude Code実行失敗: \(error.localizedDescription)"
+            }
+            commandBarProcessing = false
+            return
+        }
+
+        // /skip all — 全スキップ
+        if input == "skip all" || input == "全スキップ" {
+            let pending = messages.filter { $0.status == .pending }
+            for m in pending { m.status = .skipped }
+            store.persist(pending)
+            objectWillChange.send()
+            commandBarResult = "✅ \(pending.count) 件をスキップ"
+            return
+        }
+
+        // /run コマンド — シェル実行
+        if input.hasPrefix("run ") {
+            let cmd = String(input.dropFirst(4))
+            commandBarProcessing = true
+            commandBarResult = "⚙️ 実行中..."
+            let task = Process()
+            task.launchPath = "/bin/zsh"
+            task.arguments = ["-c", cmd]
+            let pipe = Pipe()
+            task.standardOutput = pipe
+            task.standardError = pipe
+            do {
+                try task.run()
+                task.waitUntilExit()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                commandBarResult = "✅ \(output.prefix(300))"
+            } catch {
+                commandBarResult = "⚠️ \(error.localizedDescription)"
+            }
+            commandBarProcessing = false
+            return
+        }
+
+        // それ以外 → AI指示 (既存)
+        guard let cfg = llmConfig else {
             commandBarResult = "⚠️ コマンドまたはAPIキーが設定されていません"
             return
         }
@@ -470,7 +606,7 @@ final class AppStore: ObservableObject {
         }
 
         let iso = ISO8601DateFormatter()
-        let input: [[String: Any]] = pending.map { m in
+        let cmdInput: [[String: Any]] = pending.map { m in
             [
                 "id": m.id,
                 "sender": m.sender,
@@ -506,7 +642,7 @@ final class AppStore: ObservableObject {
         指示: \(commandBarInput)
 
         未読メッセージ:
-        \(String(data: (try? JSONSerialization.data(withJSONObject: input)) ?? Data(), encoding: .utf8) ?? "[]")
+        \(String(data: (try? JSONSerialization.data(withJSONObject: cmdInput)) ?? Data(), encoding: .utf8) ?? "[]")
         """
 
         let payload: [String: Any] = [
