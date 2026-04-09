@@ -550,38 +550,109 @@ const WEB_LOGIN_HTML: &str = r##"<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Trio</title>
+<title>Trio — AIメッセージアシスタント</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;color:#e5e5e5;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.login-box{text-align:center;padding:40px 24px;max-width:400px;width:100%}
-h1{font-size:28px;font-weight:700;margin-bottom:8px;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.sub{color:#737373;font-size:14px;margin-bottom:32px}
-.input-wrap{margin-bottom:16px}
-input[type=email]{width:100%;padding:14px 16px;border-radius:12px;border:1px solid #262626;background:#171717;color:#e5e5e5;font-size:16px;outline:none}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;color:#e5e5e5;min-height:100vh}
+.hero{text-align:center;padding:60px 24px 40px;max-width:640px;margin:0 auto}
+.logo{display:inline-flex;align-items:center;justify-content:center;width:80px;height:80px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:22px;margin-bottom:24px;box-shadow:0 20px 40px rgba(59,130,246,0.3)}
+.logo span{font-size:40px}
+h1{font-size:36px;font-weight:800;margin-bottom:12px;letter-spacing:-0.02em;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.tagline{color:#a3a3a3;font-size:18px;margin-bottom:12px;line-height:1.5}
+.badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:40px}
+.badge{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid #333}
+.badge.green{color:#22c55e;border-color:#22c55e33;background:#22c55e11}
+.badge.blue{color:#3b82f6;border-color:#3b82f633;background:#3b82f611}
+.badge.purple{color:#a78bfa;border-color:#a78bfa33;background:#a78bfa11}
+
+.dl-section{background:#111;border:1px solid #262626;border-radius:16px;padding:28px;margin-bottom:32px;text-align:center}
+.dl-section h2{font-size:18px;font-weight:700;margin-bottom:8px}
+.dl-section p{font-size:13px;color:#737373;margin-bottom:16px}
+.dl-btn{display:inline-flex;align-items:center;gap:10px;padding:14px 28px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;font-size:16px;font-weight:700;text-decoration:none;transition:transform .15s}
+.dl-btn:active{transform:scale(0.97)}
+.dl-btn .icon{font-size:22px}
+.dl-info{font-size:11px;color:#525252;margin-top:12px}
+
+.features{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:32px;text-align:left}
+@media(max-width:500px){.features{grid-template-columns:1fr}}
+.feat{background:#111;border:1px solid #1a1a1a;border-radius:12px;padding:16px}
+.feat .icon{font-size:20px;margin-bottom:8px}
+.feat h3{font-size:14px;font-weight:700;margin-bottom:4px}
+.feat p{font-size:12px;color:#737373;line-height:1.4}
+
+.login-section{background:#111;border:1px solid #262626;border-radius:16px;padding:24px;margin-bottom:32px}
+.login-section h2{font-size:16px;font-weight:700;margin-bottom:4px}
+.login-section .sub{font-size:12px;color:#737373;margin-bottom:16px}
+.input-wrap{margin-bottom:12px}
+input[type=email]{width:100%;padding:12px 16px;border-radius:10px;border:1px solid #262626;background:#0a0a0a;color:#e5e5e5;font-size:15px;outline:none}
 input[type=email]:focus{border-color:#3b82f6}
-button{width:100%;padding:14px;border-radius:12px;border:none;background:#3b82f6;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
-button:active{background:#2563eb}
-.msg{margin-top:16px;font-size:14px;color:#737373}
+.login-btn{width:100%;padding:12px;border-radius:10px;border:none;background:#3b82f6;color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.login-btn:active{background:#2563eb}
+.msg{margin-top:12px;font-size:13px;color:#737373}
+
+.footer{text-align:center;padding:20px;font-size:11px;color:#404040}
+.footer a{color:#525252;text-decoration:none}
 </style>
 </head>
 <body>
-<div class="login-box">
+<div class="hero">
+
+<div class="logo"><span>📥</span></div>
 <h1>Trio</h1>
-<p class="sub">Sign in with magic link</p>
-<div class="input-wrap"><input type="email" id="email" placeholder="you@example.com" autocomplete="email"></div>
-<button onclick="doLogin()">Send Magic Link</button>
-<p class="msg" id="msg"></p>
+<p class="tagline">LINE / Discord / iMessage / Slack<br>全メッセージをAIが整理、3クリックで返信</p>
+<div class="badges">
+  <span class="badge green">✅ Apple公証済み</span>
+  <span class="badge blue">🤖 Claude AI搭載</span>
+  <span class="badge purple">🔒 E2E暗号化</span>
+</div>
+
+<!-- ダウンロード -->
+<div class="dl-section">
+  <h2>macOS アプリをダウンロード</h2>
+  <p>Developer ID署名 + Apple公証済みで安全</p>
+  <a href="https://github.com/yukihamada/trio/releases/latest/download/Trio-0.1.0.pkg" class="dl-btn">
+    <span class="icon">⬇️</span> Trio をインストール (.pkg)
+  </a>
+  <p class="dl-info">ワンクリックで /Applications にインストール · macOS 14+ · 2.1MB<br>Developer ID署名 + Apple公証済み · Yuki Hamada (5BV85JW8US)</p>
+  <p style="margin-top:8px"><a href="https://github.com/yukihamada/trio/releases/latest/download/Trio-0.1.0.dmg" style="color:#525252;font-size:11px;text-decoration:underline">DMG版はこちら</a></p>
+</div>
+
+<!-- 機能一覧 -->
+<div class="features">
+  <div class="feat"><div class="icon">💬</div><h3>LINE OCR対応</h3><p>業界初。LINEの画面をAI OCRで読み取り</p></div>
+  <div class="feat"><div class="icon">🤖</div><h3>AI返信案 8-10パターン</h3><p>承諾/辞退/質問/保留/カジュアル等</p></div>
+  <div class="feat"><div class="icon">📱</div><h3>スマホから操作</h3><p>Webダッシュボードで外出先から返信</p></div>
+  <div class="feat"><div class="icon">⚡</div><h3>ワンクリック送信</h3><p>選んで送るだけ。3秒で1件処理</p></div>
+  <div class="feat"><div class="icon">🧠</div><h3>文体学習</h3><p>使うほどあなたらしい返信を提案</p></div>
+  <div class="feat"><div class="icon">🔒</div><h3>プライバシー重視</h3><p>AES-256暗号化、データはローカル優先</p></div>
+</div>
+
+<!-- ログイン (既にアプリを持っている人向け) -->
+<div class="login-section">
+  <h2>📱 Web ダッシュボード</h2>
+  <p class="sub">Mac の Trio アプリ設定済みの方はメールでログイン</p>
+  <div class="input-wrap"><input type="email" id="email" placeholder="you@example.com" autocomplete="email"></div>
+  <button class="login-btn" onclick="doLogin()">マジックリンクを送信</button>
+  <p class="msg" id="msg"></p>
+</div>
+
+<div class="footer">
+  <a href="https://github.com/yukihamada/trio">GitHub</a> ·
+  <a href="https://github.com/yukihamada/trio/blob/master/legal/privacy.md">プライバシー</a> ·
+  <a href="https://github.com/yukihamada/trio/blob/master/legal/terms.md">利用規約</a>
+  <br>© 2026 Yuki Hamada
+</div>
+
 </div>
 <script>
 async function doLogin(){
   const email=document.getElementById('email').value.trim();
-  if(!email){document.getElementById('msg').textContent='Enter your email';return}
-  document.getElementById('msg').textContent='Sending...';
+  if(!email){document.getElementById('msg').textContent='メールアドレスを入力してください';return}
+  document.getElementById('msg').textContent='送信中...';
   try{
     const r=await fetch('/v1/auth/magiclink',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email})});
-    document.getElementById('msg').textContent=r.ok?'Check your inbox for the login link':'Error: '+r.statusText;
-  }catch(e){document.getElementById('msg').textContent='Network error'}
+    document.getElementById('msg').textContent=r.ok?'✅ メールを確認してください（リンクをクリック）':'❌ エラー: '+r.statusText;
+  }catch(e){document.getElementById('msg').textContent='❌ ネットワークエラー'}
 }
 </script>
 </body>
