@@ -551,6 +551,18 @@ const WEB_LOGIN_HTML: &str = r##"<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Trio — AIメッセージアシスタント</title>
+<meta property="og:title" content="Trio — AIメッセージアシスタント">
+<meta property="og:description" content="LINE / Discord / iMessage / Slack を横断取得。Claude AIが重要度判定+返信案を自動生成。3クリックで全メッセージに返信。">
+<meta property="og:image" content="https://raw.githubusercontent.com/yukihamada/trio/master/ogp.png">
+<meta property="og:url" content="https://trio-cloud.fly.dev/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Trio">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Trio — AIメッセージアシスタント">
+<meta name="twitter:description" content="LINE/Discord/iMessage/Slackを横断。AIが返信案を自動生成。macOS + Web対応。">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/yukihamada/trio/master/ogp.png">
+<meta name="description" content="LINE / Discord / iMessage / Slack を横断取得。Claude AIが重要度判定+返信案を自動生成。Apple公証済みmacOSアプリ。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📥</text></svg>">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0a;color:#e5e5e5;min-height:100vh}
